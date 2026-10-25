@@ -2572,7 +2572,16 @@ int main(int argc, char ** argv) {
                 // the allowance (here every context up to 512K at the full width) the cap is the one it was.
                 // STRATA_PB_GRAPH=0: the line alone (diagnostics).
                 static const bool pb_graph = !(std::getenv("STRATA_PB_GRAPH") && std::atoi(std::getenv("STRATA_PB_GRAPH")) == 0);
-                const double g_need = pb_graph ? (double) dense.span_graph_bytes(total, SB) : 0.0;   // memoized per row count
+                // memoized per row count; under a layer split the graph is the largest one any stage builds
+                double g_need = 0.0;
+                if (pb_graph) {
+                    if (pipe.enabled()) {
+                        for (int st = 0; st < pipe.n_stages(); ++st)
+                            g_need = std::max(g_need, (double) pipe.dense(st).span_graph_bytes(total, SB));
+                    } else {
+                        g_need = (double) dense.span_graph_bytes(total, SB);
+                    }
+                }
                 const double room = (double) frb - a.vram_margin_gib * 1073741824.0 - 4.3 * 1073741824.0;
                 const double room_g = (double) frb - a.vram_margin_gib * 1073741824.0 - 2.5 * 1073741824.0 - g_need;
                 const int fit_line = (int) std::max<int64_t>(2, (int64_t) (room / (0.95 * 1048576.0)));
